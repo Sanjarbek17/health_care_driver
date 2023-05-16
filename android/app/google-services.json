@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "251036577954",
+    "project_id": "iambulance-eea13",
+    "storage_bucket": "iambulance-eea13.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:251036577954:android:470766a0738bac81a027fb",
+        "android_client_info": {
+          "package_name": "com.example.health_care_driver"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "251036577954-kcsbai5401itup0eusins6t2cubhkidh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4ooPICdeRJVXAzUPZ_19iI0sdtg7bOws"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "251036577954-kcsbai5401itup0eusins6t2cubhkidh.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

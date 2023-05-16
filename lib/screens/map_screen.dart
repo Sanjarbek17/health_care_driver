@@ -3,10 +3,13 @@
 import 'dart:async';
 // import 'dart:math';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_messaging_platform_interface/firebase_messaging_platform_interface.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_location_marker/flutter_map_location_marker.dart';
+import 'package:health_care_driver/widgets/functions.dart';
 // import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 // import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
@@ -51,10 +54,44 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   double _currentLat = 39.6548;
   double _currentLng = 66.9597;
 
+  late FirebaseMessaging messaging;
   @override
   void initState() {
     super.initState();
+    print('initstate');
+    messaging = FirebaseMessaging.instance;
+    messaging.getToken().then((value) {
+      //  fBg22SJITjWIxwTdvkruzW:APA91bE1cAqAT1u6jBHIZY-YntoEX0K6plOTdAXT6yT5z_5hf-O7E3LuK4IJeMPlk-5LwYpynotpnKqHQ5x1lInyfu0xYpsfYOieTw20c8My3EbifxkjCd-FoK0AjM48RCs0bgF70yAu
+      print('fiebase token');
+      print(value);
+    });
 
+    messaging.subscribeToTopic('messaging');
+
+    FirebaseMessaging.onMessage.listen((RemoteMessage event) {
+      print("message recieved");
+      print(event.notification!.body);
+      print(event.notification!.title);
+      showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: Text(event.notification!.title!),
+              content: Text(event.notification!.body!),
+              actions: [
+                TextButton(
+                  child: Text("Ok"),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                )
+              ],
+            );
+          });
+    });
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      print('Message clicked!');
+    });
     // positionStreamController = StreamController()
     //   ..add(
     //     LocationMarkerPosition(
@@ -159,6 +196,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
 
     // final double width = MediaQuery.of(context).size.width;
     return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          sendMessage({'title': 'hello', 'body': 'world'});
+          print('send message');
+        },
+        child: Icon(Icons.add),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       body: SafeArea(
         child: Column(children: [
           Container(
