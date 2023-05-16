@@ -71,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     FirebaseMessaging.onMessage.listen((RemoteMessage event) {
       print("message recieved");
       print(event.notification!.body);
-      print(event.notification!.title);
+      print(event.data['position']);
       showDialog(
           context: context,
           builder: (BuildContext context) {

@@ -8,6 +8,7 @@ Future<void> sendMessage(Map data) async {
   String url = 'https://fcm.googleapis.com/fcm/send';
 
   // header
+  // this not secure, you should replace this with your server_key
   String server_key = 'AAAAOnLyMKI:APA91bHwCqvFRCjShbQ58DU3Bxjr4Al0ULdG0RG2ukoYK_KyjzqWntJ_nSPpamESVXy7WS89NK9BePxFaQyCMKaMwD9KMti83cwmOOD1huxgpPaVNpNoI9mBQ-s4V-c_0bihGUNPWHf5';
 
   // header
