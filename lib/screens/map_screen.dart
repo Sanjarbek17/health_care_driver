@@ -1,32 +1,21 @@
 // ignore_for_file: must_be_immutable, avoid_print
 
 import 'dart:async';
-// import 'dart:math';
+import 'dart:convert';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:firebase_messaging_platform_interface/firebase_messaging_platform_interface.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_location_marker/flutter_map_location_marker.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:health_care_driver/widgets/functions.dart';
-// import 'package:flutter_speed_dial/flutter_speed_dial.dart';
-// import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/main_provider.dart';
 import '../widgets/widgets.dart';
 import 'constants.dart';
-// import 'package:provider/provider.dart';
-// import 'package:url_launcher/url_launcher.dart';
-
-// import '../providers/main_provider.dart';
-// import '../providers/translation_provider.dart';
-// import '/screens/catalog/catalog_screen.dart';
-// import 'info/info_screen.dart';
-// import '../style/my_flutter_app_icons.dart';
-// import '../widgets/widgets.dart';
-// import 'constants.dart';
-// import 'profile/profil_screen.dart';
 
 class HomeScreen extends StatefulWidget with ChangeNotifier {
   HomeScreen({super.key});
@@ -40,8 +29,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   List<LatLng> polylinePoints = [];
 
   // ambulance car
-  // late final StreamController<LocationMarkerPosition> positionStreamController;
-  // late final StreamController<LocationMarkerHeading> headingStreamController;
+  late final StreamController<LocationMarkerPosition> positionStreamController;
+  late final StreamController<LocationMarkerHeading> headingStreamController;
 
   late bool navigationMode;
   late int pointerCount;
@@ -51,8 +40,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   late StreamController<double?> _followCurrentLocationStreamController;
   late StreamController<void> _turnHeadingUpStreamController;
 
-  double _currentLat = 39.6548;
-  double _currentLng = 66.9597;
+  final double _currentLat = 39.6548;
+  final double _currentLng = 66.9597;
 
   late FirebaseMessaging messaging;
   @override
@@ -61,7 +50,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     print('initstate');
     messaging = FirebaseMessaging.instance;
     messaging.getToken().then((value) {
-      //  fBg22SJITjWIxwTdvkruzW:APA91bE1cAqAT1u6jBHIZY-YntoEX0K6plOTdAXT6yT5z_5hf-O7E3LuK4IJeMPlk-5LwYpynotpnKqHQ5x1lInyfu0xYpsfYOieTw20c8My3EbifxkjCd-FoK0AjM48RCs0bgF70yAu
       print('fiebase token');
       print(value);
     });
@@ -70,8 +58,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
 
     FirebaseMessaging.onMessage.listen((RemoteMessage event) {
       print("message recieved");
-      print(event.notification!.body);
-      print(event.data['position']);
+      Map position = jsonDecode(event.data['position']);
+
+      // change user locaiton
+      Provider.of<UserLocationProvider>(context, listen: false).setLatitude(position['latitude'], position['longitude']);
       showDialog(
           context: context,
           builder: (BuildContext context) {
@@ -80,8 +70,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
               content: Text(event.notification!.body!),
               actions: [
                 TextButton(
-                  child: Text("Ok"),
+                  child: const Text("Ok"),
                   onPressed: () {
+                    // draw route
+                    nearestAmbulance();
+                    // show user location
+                    Provider.of<UserLocationProvider>(context, listen: false).setLocationEnabled(true);
                     Navigator.of(context).pop();
                   },
                 )
@@ -89,21 +83,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             );
           });
     });
-    // positionStreamController = StreamController()
-    //   ..add(
-    //     LocationMarkerPosition(
-    //       latitude: _currentLat,
-    //       longitude: _currentLng,
-    //       accuracy: 0,
-    //     ),
-    //   );
-    // headingStreamController = StreamController()
-    //   ..add(
-    //     LocationMarkerHeading(
-    //       heading: 0,
-    //       accuracy: pi * 0.2,
-    //     ),
-    //   );
+    positionStreamController = StreamController()
+      ..add(
+        LocationMarkerPosition(
+          latitude: _currentLat,
+          longitude: _currentLng,
+          accuracy: 0,
+        ),
+      );
+    headingStreamController = StreamController()
+      ..add(
+        LocationMarkerHeading(
+          heading: 0,
+          accuracy: pi * 0.2,
+        ),
+      );
 
     navigationMode = false;
     pointerCount = 0;
@@ -120,18 +114,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   void dispose() {
     _followCurrentLocationStreamController.close();
 
-    // positionStreamController.close();
-    // headingStreamController.close();
+    positionStreamController.close();
+    headingStreamController.close();
     super.dispose();
   }
 
-  void nearestAmbulance(Function func) {
+  void nearestAmbulance() {
+    UserLocationProvider user = Provider.of<UserLocationProvider>(context, listen: false);
     determinePosition().then((value) {
-      getRoutePoints(LatLng(_currentLat, _currentLng), LatLng(value.latitude, value.longitude)).then((value) {
+      sendMessage({'position': value.toJson()});
+      getRoutePoints(LatLng(user.latitude, user.longitude), LatLng(value.latitude, value.longitude)).then((value) {
         setState(() {
           polylinePoints = value;
         });
-        moveCar(value, func);
+        // moveCar(value);
       });
     });
   }
@@ -149,32 +145,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
       _turnHeadingUpStreamController.add(null);
     }
   }
+  // may be usefull!!!
+  // void moveCar(List<LatLng> polylinePoints) async {
+  //   await Future.forEach(polylinePoints, (element) async {
+  //     await Future.delayed(const Duration(seconds: 1)).then((value) {
+  //       headingStreamController.add(
+  //         LocationMarkerHeading(
+  //           heading: (atan2(element.longitude - _currentLng, element.latitude - _currentLat)) % (pi * 2),
+  //           accuracy: pi * 0.2,
+  //         ),
+  //       );
+  //       _currentLat = element.latitude;
+  //       _currentLat = _currentLat.clamp(-85, 85);
+  //       _currentLng = element.longitude;
+  //       _currentLng = _currentLng.clamp(-180, 180);
 
-  void moveCar(List<LatLng> polylinePoints, Function func) async {
-    await Future.forEach(polylinePoints, (element) async {
-      await Future.delayed(const Duration(seconds: 1)).then((value) {
-        // headingStreamController.add(
-        //   LocationMarkerHeading(
-        //     heading: (atan2(element.longitude - _currentLng, element.latitude - _currentLat)) % (pi * 2),
-        //     accuracy: pi * 0.2,
-        //   ),
-        // );
-        _currentLat = element.latitude;
-        _currentLat = _currentLat.clamp(-85, 85);
-        _currentLng = element.longitude;
-        _currentLng = _currentLng.clamp(-180, 180);
-
-        // positionStreamController.add(
-        //   LocationMarkerPosition(
-        //     latitude: _currentLat,
-        //     longitude: _currentLng,
-        //     accuracy: 0,
-        //   ),
-        // );
-      });
-    });
-    func();
-  }
+  //       positionStreamController.add(
+  //         LocationMarkerPosition(
+  //           latitude: _currentLat,
+  //           longitude: _currentLng,
+  //           accuracy: 0,
+  //         ),
+  //       );
+  //     });
+  //   });
+  // }
 
   final phoneNumber = Uri.parse('tel:103');
   final smsNumber = Uri.parse('sms:103');
@@ -183,19 +178,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   Widget build(BuildContext context) {
     // Language Provider
     // final language = Provider.of<Translate>(context, listen: false);
-    // get mapprovider
-    // final mapProvider = Provider.of<MapProvider>(context);
-    // if (mapProvider.isRun) {
-    //   print('car is running');
-    //   nearestAmbulance(mapProvider.makeItZero);
-    //   mapProvider.addOne();
-    // }
 
     // final double width = MediaQuery.of(context).size.width;
+    // get user location provider
+    final userLocationProvider = Provider.of<UserLocationProvider>(context);
     return Scaffold(
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          sendMessage({'title': 'hello', 'body': 'world'});
+          Position p = await determinePosition();
+          sendMessage({'position': p.toJson()});
           print('send message');
         },
         child: const Icon(Icons.add),
@@ -269,24 +260,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                     Polyline(points: polylinePoints, color: Colors.blue, strokeWidth: 4),
                   ],
                 ),
-                // the ambulance car
-                // CurrentLocationLayer(
-                //   positionStream: positionStreamController.stream,
-                //   headingStream: headingStreamController.stream,
-                //   style: LocationMarkerStyle(
-                //     marker: DefaultLocationMarker(
-                //       // color: Colors.transparent,
-                //       child: Image.asset('assets/gps_map_car.png'),
-                //     ),
-                //     markerDirection: MarkerDirection.heading,
-                //     markerSize: const Size.square(40),
-                //     // showAccuracyCircle: false,
-                //     // showHeadingSector: false,
-                //     accuracyCircleColor: Colors.black,
-                //     headingSectorColor: Colors.red,
-                //   ),
-                // ),
                 // the user marker
+                if (userLocationProvider.isLocationEnabled)
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        width: 40,
+                        height: 40,
+                        point: LatLng(userLocationProvider.latitude, userLocationProvider.longitude),
+                        builder: (ctx) => const Icon(
+                          Icons.person_pin_circle,
+                          color: Colors.red,
+                          size: 40,
+                        ),
+                      ),
+                    ],
+                  ),
+                // the ambulance marker
                 CurrentLocationLayer(
                   style: const LocationMarkerStyle(
                     marker: DefaultLocationMarker(child: Icon(Icons.navigation, color: Colors.white)),
