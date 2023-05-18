@@ -66,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
       print(value);
     });
 
-    messaging.subscribeToTopic('messaging');
+    messaging.subscribeToTopic('driver');
 
     FirebaseMessaging.onMessage.listen((RemoteMessage event) {
       print("message recieved");
@@ -88,9 +88,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
               ],
             );
           });
-    });
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      print('Message clicked!');
     });
     // positionStreamController = StreamController()
     //   ..add(
@@ -201,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
           sendMessage({'title': 'hello', 'body': 'world'});
           print('send message');
         },
-        child: Icon(Icons.add),
+        child: const Icon(Icons.add),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       body: SafeArea(
