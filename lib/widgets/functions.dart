@@ -20,7 +20,7 @@ Future<void> sendMessage(Map data) async {
   // body
   Map body = {
     "to": "/topics/user",
-    "notification": {"title": "FCM", "body": "messaging tutorial"},
+    "notification": {"title": "Ambulance", "body": "Help is on the way"},
     "data": data,
   };
 
