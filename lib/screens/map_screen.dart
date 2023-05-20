@@ -56,6 +56,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
 
     messaging.subscribeToTopic('driver');
 
+    // on background message
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage event) {
+      print("message recieved");
+      Map position = jsonDecode(event.data['position']);
+
+      // change user locaiton
+      Provider.of<UserLocationProvider>(context, listen: false).setLatitude(position['latitude'], position['longitude']);
+      showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: Text(event.notification!.title!),
+              content: Text(event.notification!.body!),
+              actions: [
+                TextButton(
+                  child: const Text("Ok"),
+                  onPressed: () {
+                    // draw route
+                    nearestAmbulance();
+                    // show user location
+                    Provider.of<UserLocationProvider>(context, listen: false).setLocationEnabled(true);
+                    Navigator.of(context).pop();
+                  },
+                )
+              ],
+            );
+          });
+    });
     FirebaseMessaging.onMessage.listen((RemoteMessage event) {
       print("message recieved");
       Map position = jsonDecode(event.data['position']);
