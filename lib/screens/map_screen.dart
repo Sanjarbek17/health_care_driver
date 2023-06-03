@@ -258,6 +258,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
           Expanded(
             child: FlutterMap(
               options: MapOptions(
+                interactiveFlags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
                 center: LatLng(39.6548, 66.9597),
                 zoom: 13,
               ),
