@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 class HistoryPage extends StatelessWidget {
   const HistoryPage({super.key});
 
-  final List<Map> lst = const [
-    {'name': 'Aziz Silva', 'phone': '(57) 5447-0401'},
-    {'name': 'Ojas Kavser', 'phone': '7640337308'},
-    {'name': 'Alyssa Mccarthy', 'phone': '076 687 6990'},
-    {'name': 'Jade Cote', 'phone': 'A76 I22-6477'},
+   final List<Map> lst = const [
+    {'name': 'Saidov Aziz', 'phone': '(97) 547-04-01'},
+    {'name': 'Olimov Alibek', 'phone': '(99)764-03-37'},
+    {'name': 'Melokova Salima', 'phone': '(90) 687-69-90'},
+    {'name': 'Islomov Muhammad', 'phone': '(88) 093-64-77'},
   ];
 
   @override
