@@ -8,14 +8,15 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_location_marker/flutter_map_location_marker.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:health_care_driver/widgets/functions.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/main_provider.dart';
+import '../style/main_style.dart';
 import '../widgets/widgets.dart';
 import 'constants.dart';
+import 'history_screen.dart';
 
 class HomeScreen extends StatefulWidget with ChangeNotifier {
   HomeScreen({super.key});
@@ -210,117 +211,123 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     // final double width = MediaQuery.of(context).size.width;
     // get user location provider
     final userLocationProvider = Provider.of<UserLocationProvider>(context);
-    return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          Position p = await determinePosition();
-          sendMessage({'position': p.toJson()});
-          print('send message');
-        },
-        child: const Icon(Icons.add),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      body: SafeArea(
-        child: Column(children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            color: Colors.red,
-            child: Row(children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(50)),
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: theme,
+      home: Scaffold(
+        floatingActionButton: FloatingActionButton(
+          backgroundColor: Colors.red,
+          onPressed: () async {
+            showBottomSheet(
+              context: context,
+              builder: (context) => HistoryPage(),
+            );
+          },
+          child: const Icon(Icons.history, color: Colors.white),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+        body: SafeArea(
+          child: Column(children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              color: Colors.red,
+              child: Row(children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(50)),
+                        child: const Icon(
+                          Icons.phone_rounded,
+                          color: Colors.red,
+                          size: 30,
+                        ),
+                      ),
+                      Text(
+                        appBarTitle,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ]),
+                    // small title text
+                    Text(
+                      appBarLeadingText,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ],
+                ),
+              ]),
+            ),
+            // change to map widget
+            // map widget
+            Expanded(
+              child: FlutterMap(
+                options: MapOptions(
+                  interactiveFlags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
+                  center: LatLng(39.6548, 66.9597),
+                  zoom: 13,
+                ),
+                nonRotatedChildren: [
+                  Positioned(
+                    right: 20,
+                    bottom: 20,
+                    child: FloatingActionButton(
+                      backgroundColor: navigationMode ? Colors.blue : Colors.grey,
+                      foregroundColor: Colors.white,
+                      onPressed: () {
+                        takeAmbulance();
+                      },
                       child: const Icon(
-                        Icons.phone_rounded,
-                        color: Colors.red,
-                        size: 30,
+                        Icons.navigation_outlined,
                       ),
                     ),
-                    Text(
-                      appBarTitle,
-                      style: Theme.of(context).textTheme.titleLarge,
+                  )
+                ],
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.app',
+                  ),
+                  PolylineLayer(
+                    polylineCulling: false,
+                    polylines: [
+                      Polyline(points: polylinePoints, color: Colors.blue, strokeWidth: 4),
+                    ],
+                  ),
+                  // the user marker
+                  if (userLocationProvider.isLocationEnabled)
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          width: 40,
+                          height: 40,
+                          point: LatLng(userLocationProvider.latitude, userLocationProvider.longitude),
+                          builder: (ctx) => const Icon(
+                            Icons.person_pin_circle,
+                            color: Colors.red,
+                            size: 40,
+                          ),
+                        ),
+                      ],
                     ),
-                  ]),
-                  // small title text
-                  Text(
-                    appBarLeadingText,
-                    style: Theme.of(context).textTheme.titleSmall,
+                  // the ambulance marker
+                  CurrentLocationLayer(
+                    style: const LocationMarkerStyle(
+                      marker: DefaultLocationMarker(child: Icon(Icons.navigation, color: Colors.white)),
+                      markerSize: Size(40, 40),
+                      markerDirection: MarkerDirection.heading,
+                    ),
+                    followCurrentLocationStream: _followCurrentLocationStreamController.stream,
+                    turnHeadingUpLocationStream: _turnHeadingUpStreamController.stream,
+                    followOnLocationUpdate: _followOnLocationUpdate,
+                    turnOnHeadingUpdate: _turnOnHeadingUpdate,
                   ),
                 ],
               ),
-            ]),
-          ),
-          // change to map widget
-          // map widget
-          Expanded(
-            child: FlutterMap(
-              options: MapOptions(
-                interactiveFlags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
-                center: LatLng(39.6548, 66.9597),
-                zoom: 13,
-              ),
-              nonRotatedChildren: [
-                Positioned(
-                  right: 20,
-                  bottom: 20,
-                  child: FloatingActionButton(
-                    backgroundColor: navigationMode ? Colors.blue : Colors.grey,
-                    foregroundColor: Colors.white,
-                    onPressed: () {
-                      takeAmbulance();
-                    },
-                    child: const Icon(
-                      Icons.navigation_outlined,
-                    ),
-                  ),
-                )
-              ],
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.example.app',
-                ),
-                PolylineLayer(
-                  polylineCulling: false,
-                  polylines: [
-                    Polyline(points: polylinePoints, color: Colors.blue, strokeWidth: 4),
-                  ],
-                ),
-                // the user marker
-                if (userLocationProvider.isLocationEnabled)
-                  MarkerLayer(
-                    markers: [
-                      Marker(
-                        width: 40,
-                        height: 40,
-                        point: LatLng(userLocationProvider.latitude, userLocationProvider.longitude),
-                        builder: (ctx) => const Icon(
-                          Icons.person_pin_circle,
-                          color: Colors.red,
-                          size: 40,
-                        ),
-                      ),
-                    ],
-                  ),
-                // the ambulance marker
-                CurrentLocationLayer(
-                  style: const LocationMarkerStyle(
-                    marker: DefaultLocationMarker(child: Icon(Icons.navigation, color: Colors.white)),
-                    markerSize: Size(40, 40),
-                    markerDirection: MarkerDirection.heading,
-                  ),
-                  followCurrentLocationStream: _followCurrentLocationStreamController.stream,
-                  turnHeadingUpLocationStream: _turnHeadingUpStreamController.stream,
-                  followOnLocationUpdate: _followOnLocationUpdate,
-                  turnOnHeadingUpdate: _turnOnHeadingUpdate,
-                ),
-              ],
             ),
-          ),
-        ]),
+          ]),
+        ),
       ),
     );
   }
