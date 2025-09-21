@@ -36,8 +36,8 @@ class EmergencyRequest {
 }
 
 class DriverService {
-  static const String baseUrl = 'http://localhost:8080';
-  static const String socketUrl = 'ws://localhost:8080';
+  static const String baseUrl = 'http://192.168.88.234:5656';
+  static const String socketUrl = 'ws://192.168.88.234:5656';
 
   late IO.Socket socket;
   String? driverId;

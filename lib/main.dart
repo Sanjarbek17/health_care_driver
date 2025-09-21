@@ -33,7 +33,6 @@ class MyApp extends StatelessWidget {
             '/dashboard': (context) => const DriverDashboardScreen(),
             '/map': (context) => HomeScreen(),
           },
-          home: const DriverRegistrationScreen(),
         ),
       ),
     );
