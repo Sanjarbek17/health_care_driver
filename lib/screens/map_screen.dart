@@ -12,6 +12,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/main_provider.dart';
+import '../providers/driver_provider.dart';
 import '../style/main_style.dart';
 import '../widgets/widgets.dart';
 import 'constants.dart';
@@ -27,6 +28,8 @@ class HomeScreen extends StatefulWidget with ChangeNotifier {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, ChangeNotifier {
   List<LatLng> polylinePoints = [LatLng(39.6548, 66.9597)];
+  LatLng? patientLocation;
+  bool showPatientMarker = false;
 
   // ambulance car
   late final StreamController<LocationMarkerPosition> positionStreamController;
@@ -65,6 +68,55 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     // Start continuous location tracking
     startLocationTracking();
     statusPermission();
+
+    // Listen for driver state changes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupDriverListener();
+    });
+  }
+
+  void _setupDriverListener() {
+    final driverProvider = Provider.of<DriverProvider>(context, listen: false);
+
+    // Listen for active request changes
+    driverProvider.addListener(() {
+      if (driverProvider.activeRequest != null && driverProvider.patientLocation != null) {
+        setState(() {
+          patientLocation = driverProvider.patientLocation;
+          showPatientMarker = true;
+        });
+
+        // Calculate route to patient
+        if (patientLocation != null) {
+          _calculateRouteToPatient();
+        }
+      } else {
+        setState(() {
+          patientLocation = null;
+          showPatientMarker = false;
+          polylinePoints = [LatLng(39.6548, 66.9597)];
+        });
+      }
+    });
+  }
+
+  Future<void> _calculateRouteToPatient() async {
+    if (patientLocation == null) return;
+
+    final userLocationProvider = Provider.of<UserLocationProvider>(context, listen: false);
+
+    try {
+      final routePoints = await getRoutePoints(
+        LatLng(userLocationProvider.latitude, userLocationProvider.longitude),
+        patientLocation!,
+      );
+
+      setState(() {
+        polylinePoints = routePoints;
+      });
+    } catch (e) {
+      print('Error calculating route to patient: $e');
+    }
   }
 
   @override
@@ -201,89 +253,140 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
         body: SafeArea(
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                color: Colors.red,
-                child: Row(
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+          child: Consumer<DriverProvider>(
+            builder: (context, driverProvider, child) {
+              return Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    color: Colors.red,
+                    child: Row(
                       children: [
-                        Row(
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(50)),
-                              child: const Icon(Icons.phone_rounded, color: Colors.red, size: 30),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(50)),
+                                  child: const Icon(Icons.phone_rounded, color: Colors.red, size: 30),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(appBarTitle, style: Theme.of(context).textTheme.titleLarge),
+                              ],
                             ),
-                            const SizedBox(width: 10),
-                            Text(appBarTitle, style: Theme.of(context).textTheme.titleLarge),
+                            // Show driver status or default text
+                            Text(
+                              driverProvider.isRegistered ? 'Driver Status: ${driverProvider.getStatusText()}' : appBarLeadingText,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
                           ],
                         ),
-                        // small title text
-                        Text(appBarLeadingText, style: Theme.of(context).textTheme.titleSmall),
+                        const Spacer(),
+                        // Show active request info if available
+                        if (driverProvider.activeRequest != null)
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.orange,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              children: [
+                                const Icon(Icons.emergency, color: Colors.white, size: 20),
+                                Text(
+                                  'ACTIVE',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-              // change to map widget
-              // map widget
-              Expanded(
-                child: Stack(
-                  children: [
-                    FlutterMap(
-                      mapController: mapController,
-                      options: MapOptions(initialCenter: LatLng(39.6548, 66.9597), initialZoom: 13),
+                  ),
+                  // change to map widget
+                  // map widget
+                  Expanded(
+                    child: Stack(
                       children: [
-                        TileLayer(urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', subdomains: const ['a', 'b', 'c'], userAgentPackageName: 'com.sanjarbek.health_care', maxZoom: 17),
-                        PolylineLayer(
-                          polylines: [Polyline(points: polylinePoints, color: Colors.blue, strokeWidth: 4)],
-                        ),
-                        // the user marker
-                        if (userLocationProvider.isLocationEnabled)
-                          MarkerLayer(
-                            markers: [
-                              Marker(
-                                width: 40,
-                                height: 40,
-                                point: LatLng(userLocationProvider.latitude, userLocationProvider.longitude),
-                                child: const Icon(Icons.person_pin_circle, color: Colors.red, size: 40),
+                        FlutterMap(
+                          mapController: mapController,
+                          options: MapOptions(initialCenter: LatLng(39.6548, 66.9597), initialZoom: 13),
+                          children: [
+                            TileLayer(urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', subdomains: const ['a', 'b', 'c'], userAgentPackageName: 'com.sanjarbek.health_care', maxZoom: 17),
+                            PolylineLayer(
+                              polylines: [Polyline(points: polylinePoints, color: Colors.blue, strokeWidth: 4)],
+                            ),
+                            // the user marker (current driver location)
+                            if (userLocationProvider.isLocationEnabled)
+                              MarkerLayer(
+                                markers: [
+                                  Marker(
+                                    width: 40,
+                                    height: 40,
+                                    point: LatLng(userLocationProvider.latitude, userLocationProvider.longitude),
+                                    child: const Icon(Icons.person_pin_circle, color: Colors.red, size: 40),
+                                  ),
+                                ],
                               ),
-                            ],
+                            // Patient marker (if responding to emergency)
+                            if (showPatientMarker && patientLocation != null)
+                              MarkerLayer(
+                                markers: [
+                                  Marker(
+                                    width: 50,
+                                    height: 50,
+                                    point: patientLocation!,
+                                    child: Container(
+                                      decoration: const BoxDecoration(
+                                        color: Colors.orange,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.emergency,
+                                        color: Colors.white,
+                                        size: 30,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            // the ambulance marker (current location with navigation)
+                            CurrentLocationLayer(
+                              style: const LocationMarkerStyle(
+                                marker: DefaultLocationMarker(child: Icon(Icons.navigation, color: Colors.white)),
+                                markerSize: Size(40, 40),
+                                markerDirection: MarkerDirection.heading,
+                              ),
+                              alignPositionStream: _alignPositionStreamController.stream,
+                              alignDirectionStream: _alignDirectionStreamController.stream,
+                              alignPositionOnUpdate: _alignPositionOnUpdate,
+                              alignDirectionOnUpdate: _alignDirectionOnUpdate,
+                            ),
+                          ],
+                        ),
+                        Positioned(
+                          right: 20,
+                          bottom: 20,
+                          child: FloatingActionButton(
+                            backgroundColor: navigationMode ? Colors.blue : Colors.grey,
+                            foregroundColor: Colors.white,
+                            onPressed: () {
+                              takeAmbulance();
+                            },
+                            child: const Icon(Icons.navigation_outlined),
                           ),
-                        // the ambulance marker
-                        CurrentLocationLayer(
-                          style: const LocationMarkerStyle(
-                            marker: DefaultLocationMarker(child: Icon(Icons.navigation, color: Colors.white)),
-                            markerSize: Size(40, 40),
-                            markerDirection: MarkerDirection.heading,
-                          ),
-                          alignPositionStream: _alignPositionStreamController.stream,
-                          alignDirectionStream: _alignDirectionStreamController.stream,
-                          alignPositionOnUpdate: _alignPositionOnUpdate,
-                          alignDirectionOnUpdate: _alignDirectionOnUpdate,
                         ),
                       ],
                     ),
-                    Positioned(
-                      right: 20,
-                      bottom: 20,
-                      child: FloatingActionButton(
-                        backgroundColor: navigationMode ? Colors.blue : Colors.grey,
-                        foregroundColor: Colors.white,
-                        onPressed: () {
-                          takeAmbulance();
-                        },
-                        child: const Icon(Icons.navigation_outlined),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
