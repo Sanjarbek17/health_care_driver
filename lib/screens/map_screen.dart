@@ -1,10 +1,9 @@
 // ignore_for_file: must_be_immutable, avoid_print
 
 import 'dart:async';
-import 'dart:convert';
 
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_location_marker/flutter_map_location_marker.dart';
@@ -32,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   // ambulance car
   late final StreamController<LocationMarkerPosition> positionStreamController;
   late final StreamController<LocationMarkerHeading> headingStreamController;
+  late final MapController mapController;
 
   late bool navigationMode;
   late int pointerCount;
@@ -44,89 +44,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   final double _currentLat = 39.6548;
   final double _currentLng = 66.9597;
 
-  late FirebaseMessaging messaging;
   @override
   void initState() {
     super.initState();
     print('initstate');
-    messaging = FirebaseMessaging.instance;
-    messaging.getToken().then((value) {
-      print('fiebase token');
-      print(value);
-    });
-    messaging.unsubscribeFromTopic('user');
-    messaging.subscribeToTopic('driver');
-
-    // on background message
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage event) {
-      print("message recieved");
-      Map position = jsonDecode(event.data['position']);
-
-      // change user locaiton
-      Provider.of<UserLocationProvider>(context, listen: false).setLatitude(position['latitude'], position['longitude']);
-      showDialog(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: Text(event.notification!.title!),
-              content: Text(event.notification!.body!),
-              actions: [
-                TextButton(
-                  child: const Text("Ok"),
-                  onPressed: () {
-                    // draw route
-                    nearestAmbulance();
-                    // show user location
-                    Provider.of<UserLocationProvider>(context, listen: false).setLocationEnabled(true);
-                    Navigator.of(context).pop();
-                  },
-                )
-              ],
-            );
-          });
-    });
-    FirebaseMessaging.onMessage.listen((RemoteMessage event) {
-      print("message recieved");
-      Map position = jsonDecode(event.data['position']);
-
-      // change user locaiton
-      Provider.of<UserLocationProvider>(context, listen: false).setLatitude(position['latitude'], position['longitude']);
-      showDialog(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: Text(event.notification!.title!),
-              content: Text(event.notification!.body!),
-              actions: [
-                TextButton(
-                  child: const Text("Ok"),
-                  onPressed: () {
-                    // draw route
-                    nearestAmbulance();
-                    // show user location
-                    Provider.of<UserLocationProvider>(context, listen: false).setLocationEnabled(true);
-                    Navigator.of(context).pop();
-                  },
-                )
-              ],
-            );
-          });
-    });
-    positionStreamController = StreamController()
-      ..add(
-        LocationMarkerPosition(
-          latitude: _currentLat,
-          longitude: _currentLng,
-          accuracy: 0,
-        ),
-      );
-    headingStreamController = StreamController()
-      ..add(
-        LocationMarkerHeading(
-          heading: 0,
-          accuracy: pi * 0.2,
-        ),
-      );
+    mapController = MapController();
+    positionStreamController = StreamController()..add(LocationMarkerPosition(latitude: _currentLat, longitude: _currentLng, accuracy: 0));
+    headingStreamController = StreamController()..add(LocationMarkerHeading(heading: 0, accuracy: pi * 0.2));
 
     navigationMode = false;
     pointerCount = 0;
@@ -135,7 +59,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     _alignDirectionOnUpdate = AlignOnUpdate.never;
     _alignPositionStreamController = StreamController<double?>();
     _alignDirectionStreamController = StreamController<void>();
-    determinePosition();
+
+    // Center map on current location when app starts
+    centerMapOnCurrentLocation();
+    // Start continuous location tracking
+    startLocationTracking();
     statusPermission();
   }
 
@@ -161,17 +89,66 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     });
   }
 
-  void takeAmbulance() {
-    setState(
-      () {
-        navigationMode = !navigationMode;
-        _alignPositionOnUpdate = navigationMode ? AlignOnUpdate.always : AlignOnUpdate.never;
-        _alignDirectionOnUpdate = navigationMode ? AlignOnUpdate.always : AlignOnUpdate.never;
-      },
-    );
+  Future<void> centerMapOnCurrentLocation() async {
+    try {
+      Position currentPosition = await determinePosition();
+
+      // Update the position stream with current location
+      positionStreamController.add(LocationMarkerPosition(latitude: currentPosition.latitude, longitude: currentPosition.longitude, accuracy: currentPosition.accuracy));
+
+      // Move map to current location with faster animation
+      mapController.move(
+        LatLng(currentPosition.latitude, currentPosition.longitude),
+        12.0, // Reduced zoom level
+      );
+    } catch (e) {
+      print('Error getting current position: $e');
+    }
+  }
+
+  void startLocationTracking() {
+    // Start listening to location updates with optimized settings
+    Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5, // Update every 5 meters (less frequent)
+      ),
+    ).listen((Position position) {
+      // Update the ambulance marker position
+      positionStreamController.add(LocationMarkerPosition(latitude: position.latitude, longitude: position.longitude, accuracy: position.accuracy));
+    });
+  }
+
+  void takeAmbulance() async {
+    setState(() {
+      navigationMode = !navigationMode;
+      _alignPositionOnUpdate = navigationMode ? AlignOnUpdate.once : AlignOnUpdate.never;
+      _alignDirectionOnUpdate = navigationMode ? AlignOnUpdate.once : AlignOnUpdate.never;
+    });
+
     if (navigationMode) {
-      _alignPositionStreamController.add(18);
-      _alignDirectionStreamController.add(null);
+      // Get current position and move map to that location
+      try {
+        Position currentPosition = await determinePosition();
+
+        // Update the position stream with current location
+        positionStreamController.add(LocationMarkerPosition(latitude: currentPosition.latitude, longitude: currentPosition.longitude, accuracy: currentPosition.accuracy));
+
+        // Move map to current location
+        mapController.move(
+          LatLng(currentPosition.latitude, currentPosition.longitude),
+          12.0, // Much lower zoom level
+        );
+
+        // Align the map view with reduced zoom
+        _alignPositionStreamController.add(12.0); // Much lower zoom
+        _alignDirectionStreamController.add(null);
+      } catch (e) {
+        print('Error getting current position: $e');
+        // Fallback: q enable alignment without moving
+        _alignPositionStreamController.add(12.0); // Much lower zoom
+        _alignDirectionStreamController.add(null);
+      }
     }
   }
   // may be usefull!!!
@@ -218,10 +195,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
         floatingActionButton: FloatingActionButton(
           backgroundColor: Colors.red,
           onPressed: () async {
-            showBottomSheet(
-              context: context,
-              builder: (context) => HistoryPage(),
-            );
+            showBottomSheet(context: context, builder: (context) => HistoryPage());
           },
           child: const Icon(Icons.history, color: Colors.white),
         ),
@@ -242,24 +216,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(50)),
-                              child: const Icon(
-                                Icons.phone_rounded,
-                                color: Colors.red,
-                                size: 30,
-                              ),
+                              child: const Icon(Icons.phone_rounded, color: Colors.red, size: 30),
                             ),
                             const SizedBox(width: 10),
-                            Text(
-                              appBarTitle,
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
+                            Text(appBarTitle, style: Theme.of(context).textTheme.titleLarge),
                           ],
                         ),
                         // small title text
-                        Text(
-                          appBarLeadingText,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
+                        Text(appBarLeadingText, style: Theme.of(context).textTheme.titleSmall),
                       ],
                     ),
                   ],
@@ -271,21 +235,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                 child: Stack(
                   children: [
                     FlutterMap(
-                      options: MapOptions(
-                        initialCenter: LatLng(39.6548, 66.9597),
-                        initialZoom: 13,
-                      ),
+                      mapController: mapController,
+                      options: MapOptions(initialCenter: LatLng(39.6548, 66.9597), initialZoom: 13),
                       children: [
-                        TileLayer(
-                          urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          subdomains: const ['a', 'b', 'c'],
-                          userAgentPackageName: 'com.sanjarbek.health_care',
-                          maxZoom: 17,
-                        ),
+                        TileLayer(urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', subdomains: const ['a', 'b', 'c'], userAgentPackageName: 'com.sanjarbek.health_care', maxZoom: 17),
                         PolylineLayer(
-                          polylines: [
-                            Polyline(points: polylinePoints, color: Colors.blue, strokeWidth: 4),
-                          ],
+                          polylines: [Polyline(points: polylinePoints, color: Colors.blue, strokeWidth: 4)],
                         ),
                         // the user marker
                         if (userLocationProvider.isLocationEnabled)
@@ -295,11 +250,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                                 width: 40,
                                 height: 40,
                                 point: LatLng(userLocationProvider.latitude, userLocationProvider.longitude),
-                                child: const Icon(
-                                  Icons.person_pin_circle,
-                                  color: Colors.red,
-                                  size: 40,
-                                ),
+                                child: const Icon(Icons.person_pin_circle, color: Colors.red, size: 40),
                               ),
                             ],
                           ),
@@ -326,9 +277,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                         onPressed: () {
                           takeAmbulance();
                         },
-                        child: const Icon(
-                          Icons.navigation_outlined,
-                        ),
+                        child: const Icon(Icons.navigation_outlined),
                       ),
                     ),
                   ],
