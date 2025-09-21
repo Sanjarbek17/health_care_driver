@@ -36,10 +36,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   late bool navigationMode;
   late int pointerCount;
 
-  late FollowOnLocationUpdate _followOnLocationUpdate;
-  late TurnOnHeadingUpdate _turnOnHeadingUpdate;
-  late StreamController<double?> _followCurrentLocationStreamController;
-  late StreamController<void> _turnHeadingUpStreamController;
+  late AlignOnUpdate _alignPositionOnUpdate;
+  late AlignOnUpdate _alignDirectionOnUpdate;
+  late StreamController<double?> _alignPositionStreamController;
+  late StreamController<void> _alignDirectionStreamController;
 
   final double _currentLat = 39.6548;
   final double _currentLng = 66.9597;
@@ -131,17 +131,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     navigationMode = false;
     pointerCount = 0;
 
-    _followOnLocationUpdate = FollowOnLocationUpdate.never;
-    _turnOnHeadingUpdate = TurnOnHeadingUpdate.never;
-    _followCurrentLocationStreamController = StreamController<double?>();
-    _turnHeadingUpStreamController = StreamController<void>();
+    _alignPositionOnUpdate = AlignOnUpdate.never;
+    _alignDirectionOnUpdate = AlignOnUpdate.never;
+    _alignPositionStreamController = StreamController<double?>();
+    _alignDirectionStreamController = StreamController<void>();
     determinePosition();
     statusPermission();
   }
 
   @override
   void dispose() {
-    _followCurrentLocationStreamController.close();
+    _alignPositionStreamController.close();
 
     positionStreamController.close();
     headingStreamController.close();
@@ -165,13 +165,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     setState(
       () {
         navigationMode = !navigationMode;
-        _followOnLocationUpdate = navigationMode ? FollowOnLocationUpdate.always : FollowOnLocationUpdate.never;
-        _turnOnHeadingUpdate = navigationMode ? TurnOnHeadingUpdate.always : TurnOnHeadingUpdate.never;
+        _alignPositionOnUpdate = navigationMode ? AlignOnUpdate.always : AlignOnUpdate.never;
+        _alignDirectionOnUpdate = navigationMode ? AlignOnUpdate.always : AlignOnUpdate.never;
       },
     );
     if (navigationMode) {
-      _followCurrentLocationStreamController.add(18);
-      _turnHeadingUpStreamController.add(null);
+      _alignPositionStreamController.add(18);
+      _alignDirectionStreamController.add(null);
     }
   }
   // may be usefull!!!
@@ -262,13 +262,53 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             // change to map widget
             // map widget
             Expanded(
-              child: FlutterMap(
-                options: MapOptions(
-                  interactiveFlags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
-                  center: LatLng(39.6548, 66.9597),
-                  zoom: 13,
-                ),
-                nonRotatedChildren: [
+              child: Stack(
+                children: [
+                  FlutterMap(
+                    options: MapOptions(
+                      initialCenter: LatLng(39.6548, 66.9597),
+                      initialZoom: 13,
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.example.app',
+                      ),
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(points: polylinePoints, color: Colors.blue, strokeWidth: 4),
+                        ],
+                      ),
+                      // the user marker
+                      if (userLocationProvider.isLocationEnabled)
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              width: 40,
+                              height: 40,
+                              point: LatLng(userLocationProvider.latitude, userLocationProvider.longitude),
+                              child: const Icon(
+                                Icons.person_pin_circle,
+                                color: Colors.red,
+                                size: 40,
+                              ),
+                            ),
+                          ],
+                        ),
+                      // the ambulance marker
+                      CurrentLocationLayer(
+                        style: const LocationMarkerStyle(
+                          marker: DefaultLocationMarker(child: Icon(Icons.navigation, color: Colors.white)),
+                          markerSize: Size(40, 40),
+                          markerDirection: MarkerDirection.heading,
+                        ),
+                        alignPositionStream: _alignPositionStreamController.stream,
+                        alignDirectionStream: _alignDirectionStreamController.stream,
+                        alignPositionOnUpdate: _alignPositionOnUpdate,
+                        alignDirectionOnUpdate: _alignDirectionOnUpdate,
+                      ),
+                    ],
+                  ),
                   Positioned(
                     right: 20,
                     bottom: 20,
@@ -282,46 +322,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                         Icons.navigation_outlined,
                       ),
                     ),
-                  )
-                ],
-                children: [
-                  TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.app',
-                  ),
-                  PolylineLayer(
-                    polylineCulling: false,
-                    polylines: [
-                      Polyline(points: polylinePoints, color: Colors.blue, strokeWidth: 4),
-                    ],
-                  ),
-                  // the user marker
-                  if (userLocationProvider.isLocationEnabled)
-                    MarkerLayer(
-                      markers: [
-                        Marker(
-                          width: 40,
-                          height: 40,
-                          point: LatLng(userLocationProvider.latitude, userLocationProvider.longitude),
-                          builder: (ctx) => const Icon(
-                            Icons.person_pin_circle,
-                            color: Colors.red,
-                            size: 40,
-                          ),
-                        ),
-                      ],
-                    ),
-                  // the ambulance marker
-                  CurrentLocationLayer(
-                    style: const LocationMarkerStyle(
-                      marker: DefaultLocationMarker(child: Icon(Icons.navigation, color: Colors.white)),
-                      markerSize: Size(40, 40),
-                      markerDirection: MarkerDirection.heading,
-                    ),
-                    followCurrentLocationStream: _followCurrentLocationStreamController.stream,
-                    turnHeadingUpLocationStream: _turnHeadingUpStreamController.stream,
-                    followOnLocationUpdate: _followOnLocationUpdate,
-                    turnOnHeadingUpdate: _turnOnHeadingUpdate,
                   ),
                 ],
               ),
